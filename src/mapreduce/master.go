@@ -28,7 +28,7 @@ func (mr *MapReduce) KillWorkers() *list.List {
 	return l
 }
 
-func AssignJob(mr *MapReduce, k int, op JobType, idle chan string) {
+func AssignJob(mr *MapReduce, k int, op JobType) {
 	var jobArgs *DoJobArgs
 	var reply DoJobReply
 	var worker string
@@ -41,22 +41,21 @@ func AssignJob(mr *MapReduce, k int, op JobType, idle chan string) {
 	select {
 	case worker = <-mr.registerChannel:
 		mr.Workers[worker] = &WorkerInfo{worker}
-	case worker = <-idle:
+	case worker = <-mr.workerChannel:
 	}
 	go func() {
 		call(worker, "Worker.DoJob", jobArgs, &reply)
-		idle <- worker
+		mr.workerChannel <- worker
 	}()
 }
 
 func (mr *MapReduce) RunMaster() *list.List {
 	// Your code here
-	idle := make(chan string)
 	for i := 0; i < mr.nMap; i++ {
-		AssignJob(mr, i, Map, idle)
+		AssignJob(mr, i, Map)
 	}
 	for i := 0; i < mr.nReduce; i++ {
-		AssignJob(mr, i, Reduce, idle)
+		AssignJob(mr, i, Reduce)
 	}
 	return mr.KillWorkers()
 }
