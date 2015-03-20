@@ -41,11 +41,11 @@ func AssignJob(mr *MapReduce, k int, op JobType) {
 	select {
 	case worker = <-mr.registerChannel:
 		mr.Workers[worker] = &WorkerInfo{worker}
-	case worker = <-mr.workerChannel:
+	case worker = <-mr.idleChannel:
 	}
 	go func() {
 		call(worker, "Worker.DoJob", jobArgs, &reply)
-		mr.workerChannel <- worker
+		mr.idleChannel <- worker
 	}()
 }
 
