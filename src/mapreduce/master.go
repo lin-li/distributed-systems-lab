@@ -28,34 +28,40 @@ func (mr *MapReduce) KillWorkers() *list.List {
 	return l
 }
 
-func AssignJob(mr *MapReduce, k int, op JobType) {
-	var jobArgs *DoJobArgs
+func AssignJob(mr *MapReduce, jobArgs *DoJobArgs, done chan int) {
 	var reply DoJobReply
 	var worker string
-	switch op {
-	case Map:
-		jobArgs = &DoJobArgs{mr.file, Map, k, mr.nReduce}
-	case Reduce:
-		jobArgs = &DoJobArgs{mr.file, Reduce, k, mr.nMap}
+	for {
+		select {
+		case worker = <-mr.registerChannel:
+			mr.Workers[worker] = &WorkerInfo{worker}
+		case worker = <-mr.idleChannel:
+		}
+		ok := call(worker, "Worker.DoJob", jobArgs, &reply)
+		if (ok) {
+			done <- 1
+			mr.idleChannel <- worker
+			return
+		}
 	}
-	select {
-	case worker = <-mr.registerChannel:
-		mr.Workers[worker] = &WorkerInfo{worker}
-	case worker = <-mr.idleChannel:
-	}
-	go func() {
-		call(worker, "Worker.DoJob", jobArgs, &reply)
-		mr.idleChannel <- worker
-	}()
 }
 
 func (mr *MapReduce) RunMaster() *list.List {
 	// Your code here
+	done := make(chan int)
 	for i := 0; i < mr.nMap; i++ {
-		AssignJob(mr, i, Map)
+		jobArgs := &DoJobArgs{mr.file, Map, i, mr.nReduce}
+		go AssignJob(mr, jobArgs, done)
+	}
+	for i := 0; i < mr.nMap; i++ { 
+		<-done
 	}
 	for i := 0; i < mr.nReduce; i++ {
-		AssignJob(mr, i, Reduce)
+		jobArgs := &DoJobArgs{mr.file, Reduce, i, mr.nMap}
+		go AssignJob(mr, jobArgs, done)
+	}
+	for i := 0; i < mr.nReduce; i++ { 
+		<-done
 	}
 	return mr.KillWorkers()
 }
